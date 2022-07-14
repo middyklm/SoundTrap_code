@@ -1,0 +1,1 @@
+"./src/flash.obj" "./src/gpio.obj" "./src/main.obj" "./src/protect.obj" "./src/sysControl.obj" "../SUDAR REBOOT.cmd" -l"C:/Users/Middy/workspace_v8/cslVC5505/Release/cslVC5505.lib" -llibc.a 

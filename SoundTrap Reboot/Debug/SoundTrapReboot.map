@@ -1,0 +1,393 @@
+******************************************************************************
+              TMS320C55x Linker PC v4.4.1                      
+******************************************************************************
+>> Linked Thu Jul 14 03:38:56 2022
+
+OUTPUT FILE NAME:   <SoundTrapReboot.out>
+ENTRY POINT SYMBOL: "_c_int00"  address: 000450f7
+
+
+MEMORY CONFIGURATION
+
+         name            origin    length      used     unused   attr    fill
+                        (bytes)   (bytes)    (bytes)   (bytes)
+----------------------  --------  ---------  --------  --------  ----  --------
+  MMR                   00000000   000000c0  00000000  000000c0  RW  
+  VEC                   000000c0   00000300  00000100  00000200  R  X
+  SARAM                 00040000   0000e000  00008746  000058ba  RW  
+
+
+SECTION ALLOCATION MAP
+(Addresses surrounded by []'s are displayed for convenience only!)
+
+output                                                          attributes/
+section   page  orgn(bytes) orgn(words) len(bytes) len(words)   input sections
+--------  ----  ----------- ----------- ---------- ----------   --------------
+vectors      0     00000100  [ 00000080 ] 00000100          *   
+                   00000100  [ 00000080 ] 00000100          *   rts55x.lib : vectors.obj (vectors)
+
+.text        0     00040000  [ 00020000 ] 00005184          *   
+                   00040000  [ 00020000 ] 0000323f          *   cslVC5505.lib : csl_mmcsd.obj (.text)
+                   0004323f  [ 0002191f+] 00001191          *                 : csl_dma.obj (.text)
+                   000443d0  [ 000221e8 ] 000003ad          *                 : csl_intc.obj (.text)
+                   0004477d  [ 000223be+] 000002ab          *   gpio.obj (.text)
+                   00044a28  [ 00022514 ] 00000220          *   main.obj (.text)
+                   00044c48  [ 00022624 ] 0000017a          *   gpio.obj (.text:retain)
+                   00044dc2  [ 000226e1 ] 0000014b          *   flash.obj (.text)
+                   00044f0d  [ 00022786+] 00000114          *   sysControl.obj (.text)
+                   00045021  [ 00022810+] 0000004d          *   rts55x.lib : autoinit.obj (.text)
+                   0004506e  [ 00022837 ] 0000004b          *              : args_main.obj (.text)
+                   000450b9  [ 0002285c+] 0000003e          *              : exit.obj (.text)
+                   000450f7  [ 0002287b+] 00000034          *              : boot.obj (.text)
+                   0004512b  [ 00022895+] 0000002a          *              : udiv.obj (.text)
+                   00045155  [ 000228aa+] 00000013          *              : lmpy.obj (.text)
+                   00045168  [ 000228b4 ] 00000012          *              : _lock.obj (.text)
+                   0004517a  [ 000228bd ] 00000007          *              : exit.obj (.text:CIO_breakpoint)
+                   00045181  [ 000228c0+] 00000002          *              : vectors.obj (.text)
+                   00045183  [ 000228c1 ] 00000001          *   --HOLE-- [fill = 20]
+
+.data        0   [ 00040000 ]  00020000          *   00000000   UNINITIALIZED
+
+.stack       0   [ 00045184 ]  000228c2          *   00001000   UNINITIALIZED
+                 [ 00045184 ]  000228c2          *   00001000   --HOLE--
+
+.sysstack 
+*            0   [ 00047184 ]  000238c2          *   00000800   UNINITIALIZED
+                 [ 00047184 ]  000238c2          *   00000800   --HOLE--
+
+.bss         0   [ 00048190 ]  000240c8          *   00000268   
+                 [ 00048190 ]  000240c8          *   00000102   main.obj (.bss) [fill = 0]
+                 [ 00048394 ]  000241ca          *   00000092   flash.obj (.bss) [fill = 0]
+                 [ 000484b8 ]  0002425c          *   00000084   cslVC5505.lib : csl_intc.obj (.bss) [fill = 0]
+                 [ 000485c0 ]  000242e0          *   00000042   gpio.obj (.bss) [fill = 0]
+                 [ 00048644 ]  00024322          *   00000005   sysControl.obj (.bss) [fill = 0]
+                 [ 0004864e ]  00024327          *   00000001   protect.obj (.bss) [fill = 0]
+                 [ 00048650 ]  00024328          *   00000004   rts55x.lib : _lock.obj (.bss) [fill = 0]
+                 [ 00048658 ]  0002432c          *   00000004              : exit.obj (.bss) [fill = 0]
+
+.switch      0   [ 00048660 ]  00024330          *   00000060   
+                 [ 00048660 ]  00024330          *   00000020   cslVC5505.lib : csl_dma.obj (.switch:_DMA_config)
+                 [ 000486a0 ]  00024350          *   00000020                 : csl_dma.obj (.switch:_DMA_getConfig)
+                 [ 000486e0 ]  00024370          *   00000020                 : csl_dma.obj (.switch:_DMA_reset)
+
+.cinit       0   [ 00048720 ]  00024390          *   00000019   
+                 [ 00048720 ]  00024390          *   0000000a   rts55x.lib : _lock.obj (.cinit)
+                 [ 00048734 ]  0002439a          *   0000000a              : exit.obj (.cinit)
+                 [ 00048748 ]  000243a4          *   00000004   protect.obj (.cinit)
+                 [ 00048750 ]  000243a8          *   00000001   --HOLE-- [fill = 0]
+
+
+GLOBAL SYMBOLS: SORTED ALPHABETICALLY BY Name 
+
+abs. value/
+byte addr   word addr   name
+---------   ---------   ----
+00000002                $TI_capability$C5500$CallingConvention
+00000002                $TI_capability$C5500$MemoryModel
+00000001                $TI_capability_requires_rev3
+            000240c8    .bss
+            00020000    .data
+00040000                .text
+0004517b                C$$EXIT
+00045155                I$$LMPY
+0004512b                I$$UDIV
+00045140                I$$UMOD
+000443bc                _DMA_close
+00043b77                _DMA_config
+00043805                _DMA_getConfig
+0004378f                _DMA_getLastTransferType
+00043764                _DMA_init
+000436d8                _DMA_open
+00043434                _DMA_reset
+00043354                _DMA_start
+00043274                _DMA_stop
+0004323f                _DMA_swapWords
+            00024323    _DeviceId
+            000242e2    _GPIO_Isrs
+0004472b                _IRQ_clear
+0004471b                _IRQ_clearAll
+000446d1                _IRQ_config
+00044669                _IRQ_disable
+0004465b                _IRQ_disableAll
+000445ef                _IRQ_enable
+000445b4                _IRQ_getArg
+00044568                _IRQ_getConfig
+000443d0                _IRQ_globalDisable
+0004455a                _IRQ_globalEnable
+000443de                _IRQ_globalRestore
+0004450d                _IRQ_init
+000444ea                _IRQ_map
+0004448e                _IRQ_restore
+00044467                _IRQ_setArg
+00044449                _IRQ_setVecs
+000443ea                _IRQ_test
+00041df6                _MMC_checkReadDmaDone
+0004319f                _MMC_clearResponse
+0004315e                _MMC_close
+000430d9                _MMC_config
+00043055                _MMC_deselectCard
+00043026                _MMC_drrdy
+00042ff9                _MMC_dxrdy
+00042e46                _MMC_eventDisable
+00042c93                _MMC_eventEnable
+000429c6                _MMC_getCardCsd
+00042901                _MMC_getCardStatus
+0004287c                _MMC_getConfig
+00042851                _MMC_getNumberOfCards
+00042820                _MMC_getStatus
+00040765                _MMC_ierDisable
+000407b7                _MMC_ierEnable
+000427f5                _MMC_init
+00040796                _MMC_intEnable
+00042687                _MMC_open
+00041e75                _MMC_read
+00041dbf                _MMC_saveStatus
+000419d3                _MMC_selectCard
+0004186c                _MMC_sendAllCID
+000417d0                _MMC_sendCmd
+00041765                _MMC_sendGoIdle
+00041707                _MMC_sendOpCond
+00041631                _MMC_sendRca
+000415c3                _MMC_setBlockLength
+00041597                _MMC_setCallBack
+0004157a                _MMC_setCardPtr
+0004154d                _MMC_setCardType
+00041514                _MMC_setDataTransferCallback
+00041459                _MMC_setDmaChanConfig
+00041415                _MMC_setDmaHandle
+000413b0                _MMC_setEndianMode
+0004132d                _MMC_setRca
+00041259                _MMC_setWriteBlkEraseCnt
+000411d2                _MMC_setupNative
+00041145                _MMC_stop
+000407e8                _MMC_write
+00000100                _Reset
+0004069b                _SD_configurePullup
+0004027a                _SD_getCardCsd
+000400fe                _SD_sendAllCID
+00040000                _SD_setBusWidth
+            000238c2    __STACK_END
+00002000                __STACK_SIZE
+00001000                __SYSSTACK_SIZE
+00000001                __TI_args_main
+ffffffff                ___binit__
+            000240c8    ___bss__
+ffffffff                ___c_args__
+            00024390    ___cinit__
+            00020000    ___data__
+            00020000    ___edata__
+            00024330    ___end__
+00045184                ___etext__
+ffffffff                ___pinit__
+00040000                ___text__
+0004506e                __args_main
+            0002432c    __cleanup_ptr
+0004512b                __divu
+            0002432e    __dtors_ptr
+            00024328    __lock
+00045155                __mpyli
+00045178                __nop
+00045170                __register_lock
+00045168                __register_unlock
+00045140                __remu
+            000228c2    __stack
+            000238c2    __sysstack
+            0002432a    __unlock
+0004517a                _abort
+00045021                _auto_init
+            000241c9    _bufAddress
+000450f7                _c_int00
+            0002423a    _cardCsdObj
+            0002422a    _cardIdObj
+000450b9                _exit
+00044ab2                _fatal
+00044dee                _flashInit
+00044a28                _flashLed
+00044dc2                _flashRead
+00044893                _gpioEnableInterrupt
+0004497d                _gpioGetVal
+00044a01                _gpioInit
+000449ec                _gpioInterruptHandlerDeRegister
+000449d3                _gpioInterruptHandlerRegister
+00044c48                _gpioIsr
+            000242e0    _gpioRegs
+0004478d                _gpioSetDir
+00044812                _gpioSetVal
+00044b4d                _main
+            0002420c    _mmcCardObj
+            000241ca    _mmcsdHandle
+            000241cc    _pMmcsdContObj
+            000241c8    _pageAddress
+            00024327    _protectm
+            000240c8    _sdBuf
+00044ad3                _sdRead16
+00044b24                _sdRead32
+00044f0d                _sysControlCalcId
+00044fab                _sysControlInit
+00044f77                _sysControlResetPeripheral
+            00024322    _sysCtrlReg
+ffffffff                binit
+            00024390    cinit
+            00020000    edata
+            00024330    end
+00045184                etext
+ffffffff                pinit
+
+
+GLOBAL SYMBOLS: SORTED BY Symbol Address 
+
+abs. value/
+byte addr   word addr   name
+---------   ---------   ----
+00000001                $TI_capability_requires_rev3
+00000001                __TI_args_main
+00000002                $TI_capability$C5500$CallingConvention
+00000002                $TI_capability$C5500$MemoryModel
+00000100                _Reset
+00001000                __SYSSTACK_SIZE
+00002000                __STACK_SIZE
+            00020000    .data
+00040000                .text
+00040000                _SD_setBusWidth
+            00020000    ___data__
+            00020000    ___edata__
+00040000                ___text__
+            00020000    edata
+000400fe                _SD_sendAllCID
+0004027a                _SD_getCardCsd
+0004069b                _SD_configurePullup
+00040765                _MMC_ierDisable
+00040796                _MMC_intEnable
+000407b7                _MMC_ierEnable
+000407e8                _MMC_write
+00041145                _MMC_stop
+000411d2                _MMC_setupNative
+00041259                _MMC_setWriteBlkEraseCnt
+0004132d                _MMC_setRca
+000413b0                _MMC_setEndianMode
+00041415                _MMC_setDmaHandle
+00041459                _MMC_setDmaChanConfig
+00041514                _MMC_setDataTransferCallback
+0004154d                _MMC_setCardType
+0004157a                _MMC_setCardPtr
+00041597                _MMC_setCallBack
+000415c3                _MMC_setBlockLength
+00041631                _MMC_sendRca
+00041707                _MMC_sendOpCond
+00041765                _MMC_sendGoIdle
+000417d0                _MMC_sendCmd
+0004186c                _MMC_sendAllCID
+000419d3                _MMC_selectCard
+00041dbf                _MMC_saveStatus
+00041df6                _MMC_checkReadDmaDone
+00041e75                _MMC_read
+00042687                _MMC_open
+000427f5                _MMC_init
+00042820                _MMC_getStatus
+00042851                _MMC_getNumberOfCards
+0004287c                _MMC_getConfig
+00042901                _MMC_getCardStatus
+000429c6                _MMC_getCardCsd
+00042c93                _MMC_eventEnable
+00042e46                _MMC_eventDisable
+00042ff9                _MMC_dxrdy
+00043026                _MMC_drrdy
+00043055                _MMC_deselectCard
+000430d9                _MMC_config
+0004315e                _MMC_close
+0004319f                _MMC_clearResponse
+0004323f                _DMA_swapWords
+00043274                _DMA_stop
+00043354                _DMA_start
+00043434                _DMA_reset
+000436d8                _DMA_open
+00043764                _DMA_init
+0004378f                _DMA_getLastTransferType
+00043805                _DMA_getConfig
+00043b77                _DMA_config
+000443bc                _DMA_close
+000443d0                _IRQ_globalDisable
+000443de                _IRQ_globalRestore
+000443ea                _IRQ_test
+00044449                _IRQ_setVecs
+00044467                _IRQ_setArg
+0004448e                _IRQ_restore
+000444ea                _IRQ_map
+0004450d                _IRQ_init
+0004455a                _IRQ_globalEnable
+00044568                _IRQ_getConfig
+000445b4                _IRQ_getArg
+000445ef                _IRQ_enable
+0004465b                _IRQ_disableAll
+00044669                _IRQ_disable
+000446d1                _IRQ_config
+0004471b                _IRQ_clearAll
+0004472b                _IRQ_clear
+0004478d                _gpioSetDir
+00044812                _gpioSetVal
+00044893                _gpioEnableInterrupt
+0004497d                _gpioGetVal
+000449d3                _gpioInterruptHandlerRegister
+000449ec                _gpioInterruptHandlerDeRegister
+00044a01                _gpioInit
+00044a28                _flashLed
+00044ab2                _fatal
+00044ad3                _sdRead16
+00044b24                _sdRead32
+00044b4d                _main
+00044c48                _gpioIsr
+00044dc2                _flashRead
+00044dee                _flashInit
+00044f0d                _sysControlCalcId
+00044f77                _sysControlResetPeripheral
+00044fab                _sysControlInit
+00045021                _auto_init
+0004506e                __args_main
+000450b9                _exit
+000450f7                _c_int00
+0004512b                I$$UDIV
+0004512b                __divu
+00045140                I$$UMOD
+00045140                __remu
+00045155                I$$LMPY
+00045155                __mpyli
+00045168                __register_unlock
+00045170                __register_lock
+00045178                __nop
+0004517a                _abort
+0004517b                C$$EXIT
+00045184                ___etext__
+            000228c2    __stack
+00045184                etext
+            000238c2    __STACK_END
+            000238c2    __sysstack
+            000240c8    .bss
+            000240c8    ___bss__
+            000240c8    _sdBuf
+            000241c8    _pageAddress
+            000241c9    _bufAddress
+            000241ca    _mmcsdHandle
+            000241cc    _pMmcsdContObj
+            0002420c    _mmcCardObj
+            0002422a    _cardIdObj
+            0002423a    _cardCsdObj
+            000242e0    _gpioRegs
+            000242e2    _GPIO_Isrs
+            00024322    _sysCtrlReg
+            00024323    _DeviceId
+            00024327    _protectm
+            00024328    __lock
+            0002432a    __unlock
+            0002432c    __cleanup_ptr
+            0002432e    __dtors_ptr
+            00024330    ___end__
+            00024330    end
+            00024390    ___cinit__
+            00024390    cinit
+ffffffff                ___binit__
+ffffffff                ___c_args__
+ffffffff                ___pinit__
+ffffffff                binit
+ffffffff                pinit
+
+[150 symbols]

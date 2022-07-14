@@ -1,0 +1,1 @@
+"./src/flash.obj" "./src/gpio.obj" "./src/main.obj" "./src/protect.obj" "./src/sysControl.obj" --library=libc.a 
