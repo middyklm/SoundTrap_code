@@ -1,0 +1,87 @@
+;// SoundTrap Software v1.0
+;//
+;// Copyright (C) 2011-2014, John Atkins and Mark Johnson
+;//
+;// This work is a derivative of the D3-API Copyright (C) 2008-2010, Mark Johnson
+;//
+;// This file is part of the SoundTrap software. SoundTrap is an acoustic
+;// recording system intended for underwater acoustic measurements. This
+;// component of the SoundTrap project is free software: you can redistribute
+;// it and/or modify it under the terms of the GNU General Public License as
+;// published by the Free Software Foundation, either version 3 of the License,
+;// or any later version.
+;//
+;// The SoundTrap software is distributed in the hope that it will be useful,
+;// but WITHOUT ANY WARRANTY; without even the implied warranty of
+;// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+;// General Public License for more details.
+;//
+;// You should have received a copy of the GNU General Public License
+;// along with this code. If not, see <http://www.gnu.org/licenses/>.
+
+; //!< crc.s55 v1.0
+; //!< Assembly functions for cyclic redundancy code computation
+
+	.mmregs
+
+	.global	 _crc_asm
+	.global	 _CRCtab
+
+	; disable remarks
+	.noremark 5569		; memory write stall CPU_39
+	.noremark 5573		; MAR operation within 5 cycles of BK/BSA update CPU_43
+	.noremark 5673		; accumulator overflow in shift left CPU_89
+	.noremark 5688		; RPTBLOCAL in compatibility mode CPU_85
+
+	.text
+	
+
+_crc_asm
+; prototype: 	void crc_asm(uns *crc, uns *ivec, int len)
+; function: 	compute 16 bit cyclic redundancy codes for a block of
+;				len words
+; algorithm:	for len: increment crc on MSB then LSB of each word in vec
+; cycles: 	    ?
+; passed arguments:
+;		uns	*crc						AR0
+;		Uns *p 	pointer to input data	AR1
+;		Int	len	16 bit data				T0
+
+        SUB       #1,T0        	; block repeat count is len-1
+        MOV       T0,BRC0      	; load block counter
+
+ 		MOV	  	  #(_CRCtab>>16)<<#16,AC0	; CRC table pointer: high
+ 		MOV	  	  AC0,XAR3
+		MOV	  	  #(_CRCtab & 0xffff),AR3	; CRC table pointer: low
+
+    	MOV	  	  *AR0,AC0   		; AC0 = fcs
+     	MOV    	  uns(high_byte(*AR1)),AC1   ; load MSB of next data point
+        RPTB      E11
+
+        AND       #255,AC1,T0
+        MOV       uns(low_byte(*AR1+)),AC1
+		;T0 =low, AC1=high, ACO=fcs
+
+		MOV		  T0,AC2
+        XOR       AC0<<#-8,AC2; AC2 = (fcs >>8) ^ low
+        AND       #255,AC2,T0; T0 = AC2 & 0xff
+
+        SFTL   	  AC0,#8 ;fcs = fcs << 8
+
+        XOR       *AR3(T0),AC0; fcs = fcs ^ tab[T0]
+        XOR       AC0<<#-8,AC1; AC1 = (fcs >>8) ^ high
+        AND       #255,AC1,T0; T0 = AC1 & 0xff
+        SFTL   	  AC0,#8;	   fcs = fcs << 8
+		NOP
+     	MOV    	  uns(high_byte(*AR1)),AC1   ; load MSB of next data point AC1 = high
+E11:
+        XOR       *AR3(T0),AC0
+		MOV	  AC0,*AR0			; save the checksum
+        RET
+
+
+; re-enable remarks
+	.remark 5569
+	.remark 5573
+	.remark 5673
+	.remark 5688

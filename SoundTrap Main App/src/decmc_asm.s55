@@ -1,0 +1,253 @@
+;// SoundTrap Software v1.0
+;//
+;// Copyright (C) 2011-2014, John Atkins and Mark Johnson
+;//
+;// This work is a derivative of the D3-API Copyright (C) 2008-2010, Mark Johnson
+;//
+;// This file is part of the SoundTrap software. SoundTrap is an acoustic
+;// recording system intended for underwater acoustic measurements. This
+;// component of the SoundTrap project is free software: you can redistribute
+;// it and/or modify it under the terms of the GNU General Public License as
+;// published by the Free Software Foundation, either version 3 of the License,
+;// or any later version.
+;//
+;// The SoundTrap software is distributed in the hope that it will be useful,
+;// but WITHOUT ANY WARRANTY; without even the implied warranty of
+;// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+;// General Public License for more details.
+;//
+;// You should have received a copy of the GNU General Public License
+;// along with this code. If not, see <http://www.gnu.org/licenses/>.
+
+
+; //!< decmc_asm.s55 v1.0
+; //!< Multi-channel decimator
+;
+
+    .ARMS_on                      ;enable assembler for ARMS=1
+    .CPL_on                       ;enable assembler for CPL=1
+    .mmregs                       ;enable mem mapped register names
+
+	.global  _decmc
+
+	; disable remarks - none apply to C5509A
+	.noremark 5503		; MMR read of SP/SSP CPU_84
+	.noremark 5505		; MMR read of SP/SSP CPU_84
+	.noremark 5549		; MAR in compatibility mode CPU_28
+	.noremark 5568		; BCC failure CPU_38
+	.noremark 5571		; carry bit corruption CPU_41
+	.noremark 5573		; MAR and BK/BSA updates CPU_43
+	.noremark 5579		; dual MAC sensitive to stalls CPU_45
+	.noremark 5601		; MMR write to ST0/2 not pipeline protected CPU_75
+	.noremark 5673		; accumulator shift left overflow CPU_89
+	.noremark 5684		; indirect write to MMR reg CPU_116
+	.noremark 5688		; RPTLOCAL in compatibility mode CPU_85
+
+ST2mask  .set  0000000100001100b    ; circular/linear pointers
+
+      .asg     "#0", BOFFS			; structure offset for buffer offset
+      .asg     "short(#1)", NF			; structure offset for nf
+      .asg     "short(#2)", NCH			; structure offset for nch
+      .asg     "short(#3)", BSIZE		; structure offset for buffer size
+      .asg     "short(#4)", DF			; structure offset for df
+      .asg     "short(#5)", NNEW		; structure offset for nnew
+      .asg     "short(#6)", IDF			; structure offset for idf
+      .asg     "short(#7)", TEMP1		; structure offset for temp storage
+      .asg     "#8", FILTCOEF			; structure offset for coef
+      .asg     "#10", BUFF				; structure offset for buff
+	  ; gap of 2 for pout
+	  .asg	   "#14", OVLD				; structure offset for overload flag
+
+_decmc:
+; prototype: 	int decmc(DECM_Obj *b, int *ip, int *op, int nin)
+; function:		multi-channel decimation
+; cycles:	nch*ns/2*(nf+2*df+5)+OH verified
+; notes:	2*floor(ns/2) iterations will be performed
+;			nch can be any value >=1
+;			nf must be at least 2. 
+;			coef must point to a different DARAM space than buff
+;			buffer length must be (nf+2*df-1)*nch.
+; passed arguments:
+;		DECM_Obj *b decimator struct	pointer to struct	AR0
+;		Int16 *ip 	input data			pointer to data		AR1
+;		Int16 *op 	output data			pointer to data		AR2
+;		Int16 nin	number of input samples  16 bit data	T0
+
+
+		PSH		  T2,T3
+		PSH		  mmap(ST1_55)
+		PSH		  mmap(ST2_55)
+
+	    AND		  #01FFh, mmap(ST0_55)  ; clear all ACOVx,TC1, TC2, C
+		OR		  #0700h, mmap(ST1_55)  ; set M40, SXMD, SATD
+		MOV		  XAR2,XAR4				; move output pointer to free AR2
+
+		; set up buffer, loop counts and buffer offset
+		MOV		  *AR0(NCH),T1	; nch
+		MOV		  *AR0(BSIZE),BK03		; buffer size (nf*nch)
+		MPYM	  *AR0(NNEW),T1,AC0		; nch*nnew
+		MOV		  dbl(*AR0(BUFF)),XAR2	; buffer full address
+		MOV		  mmap(AR2),BSA23		; buffer start address
+		MOV		  XAR2,XAR3				; setup high part of AR2 same as AR3
+
+		; set up filter
+		MOV		  dbl(*AR0(FILTCOEF)),XCDP	; filter coefficients
+		MOV		  *AR0(NF),BKC			; nf
+		|| PSH	  AR5
+		MOV		  mmap(CDP),BSAC		; filter coefficients start address
+
+		; enable circular buffers
+		OR		  #ST2mask, mmap(ST2_55)		; config circ/linear pointers
+
+		BCC		  LL0,AC0==0			; catch a 0 nnew
+		MOV		  *AR0,AR2				; load boffs
+		|| SUB	  #1,AC0				; nch*nnew-1
+		MOV	  	  AC0,T1				; copy offset to T1 for AADD
+		MOV		  T1,CSR				; prepare loop count
+
+		AADD	  T1,AR2				; add the offset to the buffer address
+
+		RPT	  	  CSR					; repeat nch*nnew times
+		MOV		  *AR1+,*AR2-			; pre-load buffer with input points
+LL0:
+		; make a copy of the input and output pointers
+		MOV	  	  XAR1,AC2
+		MOV	  	  XAR4,AC3
+		MOV		  *AR0(NF),T2			; nf
+
+		MOV		  *AR0(DF),T1			; df
+		|| SUB	  #2,T2					; filter loop executes nf-1 times - copy T2 to CSR when needed
+		MPYM	  *AR0(NCH),T1,AC0		; df*nch
+		|| MOV	  T2,CSR				; load CSR with nf-2
+		MOV	  	  #0,CDP				; filter always starts at coef 0
+
+		SFTL	  T1,#1					; 2*df
+										; AR5 = 2df-nf
+		SUB		  *AR0(NF),T1,AR5		; load loop executes 2df-1 times - add AR5 to CSR when needed
+
+; ns = (int)(((long)(ni)*f->idf)>>16)+1 ;
+; f->nnew = 2*df*ns - ni ;
+
+		SUB		  *AR0(NNEW),T0			; ni -= nnew
+		BCC		  L10,T0>=#0			; if there are not enough samples
+
+		; prepare to return as no output samples can be made
+		POP		  AR5
+		|| NEG	  T0					; nnew -= ni
+		;AND		  #0F9BFh, mmap(ST1_55)     ; clear M40, FRCT, SATD
+		;AND		  #0FF00h, mmap(ST2_55)		; clear CDPLC and AR[7-0]LC
+		POP	      mmap(ST2_55)
+		POP	      mmap(ST1_55)
+		POP		  T2,T3
+		|| MOV	  T0,*AR0(NNEW)			; update nnew
+		MOV	      #0,T0					; return 0 samples done
+        || RET
+
+L10:
+		MPYM	  *AR0(IDF),T0,AC1		; loop count = ni*idf+1
+		|| MOV	  AC0,T3				; initial buffer pointer difference is df*nch
+		MOV	  	  T0,AC0
+		|| MOV	  HI(AC1),T0			; ns-1
+		ADD		  #1<<#16,AC1			; ns
+		MAS		  T1,AC1,AC0			; ni-2*df*ns
+		|| MOV	  T0,BRC1				; level 1 loop executes ns times
+		SUB		  #1,T1					; 2*df-1
+		|| NEG	  AC0					; 2*df*ns-ni
+		MOV		  AC0,*AR0(NNEW)		; new nnew
+		MOV		  HI(AC1),*AR0(TEMP1)
+
+		; set up loop counts
+		MPYM	  *AR0(NCH),T1,AC0		; (2*df-1)*nch
+		MOV		  AC0,T1				; 2nd buffer increment = (2*df-1)*nch
+
+		MOV		  *AR0(NCH),T0			; nch
+		SUB		  #1,T0					; nch-1
+		ADD		  *AR0,T0,AC0			; boffs+nch-1
+		|| MOV	  T0,BRC0				; level 0 loop executes nch times
+		ADD		  #1,T0					; nchs - 1st buffer increment
+		|| MOV	  AC0,*AR0				; store revised boffs
+
+		NEG		  AR5,T2
+		BSET	  FRCT			; turn on fractional mode
+
+		.arms_off				; change addressing mode to allow T1
+		BCLR	  ARMS			; post-increments. No short(#k) indirects
+								; from here on.
+		|| RPTB	  L12			; Level 0 loop: do for each channel
+
+		MOV		  *AR0,AR2				; initial buffer offset (boffs+ch)
+		SUB		  #1,*AR0
+		AMOV	  AR2,AR3				; setup a 2nd pointer to the first buffer to avoid indexed addressing
+		AADD	  T3,AR3				; move the 2nd pointer back one sample
+
+		MOV		  #0,AC0		; clear accumulator
+        || RPTBLOCAL L11				; do ns/2 times
+
+		MOV		  #0,AC1								; level 1 loop starts here		MOV		  #0,AC1
+		|| RPTADD CSR,AR5
+
+		MAC	  	  *(AR3+T0),*CDP+,AC0	; AR3 points df behind the newest sample
+		::MAC	  *(AR2+T0),*CDP+,AC1	; AR2 points to the newest sample
+
+		MACR	  *AR3,*CDP+,AC0		; AR3 now points to the oldest sample
+		::MACR    *(AR2+T1),*CDP+,AC1		; AR2 now points to the oldest sample
+
+		RPTADD	  CSR,T2
+		MOV		  *(AR1+T0),*(AR2-T0)		; load buffer with 2*df new input points
+
+		MOV		  *(AR1+T0),*AR2		; no increment in last load
+		|| SAT	  AC0
+
+		MOV		  HI(AC0),*(AR4+T0)			; loop ends, store results
+		|| SAT	  AC1
+L11:
+		MOV		  HI(AC1),*(AR4+T0)			; loop ends, store results
+		|| MOV	  #0,AC0
+
+		; re-initialize the input and output pointers
+		ADD		  #1,AC2			; point to the next channel
+		ADD		  #1,AC3
+		|| MOV	  AC2,XAR1
+L12:
+		MOV		  AC3,XAR4
+										; end of level 0 loop
+
+		POP		  AR5
+		|| BSET	  ARMS
+		.arms_on
+
+		; Check for overflow
+		MOV	  #0,T0				; clear flag
+		|| XCC	  L13,overflow(AC0)
+		BSET	  T0,*AR0(OVLD)
+L13:
+
+		XCC	  	  L14,overflow(AC1)
+		BSET	  T0,*AR0(OVLD)
+L14:
+
+		;AND		  #0F9BFh, mmap(ST1_55)     ; clear M40, FRCT, SATD
+		MOV		  *AR0(TEMP1),T0			; recover ns
+		; disable circular buffers
+		;AND		  #0FF00h, mmap(ST2_55)		; clear CDPLC and AR[7-0]LC
+		POP	      mmap(ST2_55)
+		POP	      mmap(ST1_55)
+		POP		  T2,T3
+		|| SFTL	  T0,#1						; number of output samples is ns*2
+		MOV		  AR2,*AR0					; store buffer offset
+        || RET
+
+
+	; re-enable remarks
+	.remark 5503
+	.remark 5505
+	.remark 5549
+	.remark 5568
+	.remark 5571
+	.remark 5573
+	.remark 5579
+	.remark 5601
+	.remark 5673
+	.remark 5688
+	.remark 5684
+

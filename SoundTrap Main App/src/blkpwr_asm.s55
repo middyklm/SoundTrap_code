@@ -1,0 +1,115 @@
+; D3-API v1.0
+; Copyright (C) 2008-2010, Mark Johnson / WHOI
+;
+; This file is part of D3, a real-time patch panel scheduler
+; for digital signal processors.
+;
+; D3 is distributed in the hope that it will be useful,
+; but WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+; D3 General License for more details.
+;
+; You should have received a copy of the D3 General License
+; along with D3. If not, contact markjohnson@st-andrews.ac.uk.
+
+; //!< blkpwr_asm.s55 v1.0
+; //!< Block-power detector
+; Last modified: July 2014
+;
+
+    .ARMS_on                      ;enable assembler for ARMS=1
+    .CPL_on                       ;enable assembler for CPL=1
+    .mmregs                       ;enable mem mapped register names
+
+	.global  _find1stblkpwr
+
+	; disable remarks - none apply to C5509A
+	.noremark 5503		; MMR read of SP/SSP CPU_84
+	.noremark 5505		; MMR read of SP/SSP CPU_84
+	.noremark 5549		; MAR in compatibility mode CPU_28
+	.noremark 5568		; BCC failure CPU_38
+	.noremark 5573		; MAR and BK/BSA updates CPU_43
+	.noremark 5579		; dual MAC sensitive to stalls CPU_45
+	.noremark 5601		; MMR write to ST0/2 not pipeline protected CPU_75
+	.noremark 5673		; accumulator shift left overflow CPU_89
+	.noremark 5688		; RPTLOCAL in compatibility mode CPU_85
+
+_find1stblkpwr:
+; prototype: 	int find1stblkpwr(BLKPWR_Obj *b, int *ip, int ns, long thr)
+; function:	block-power detector
+; This function reports the first sample in ip for which the pwr sum exceeds
+; thr. The entire ns samples are processed but only the first detection is reported.
+; This is done to avoid a conditional break of the repeat loop which is inefficient
+; in the dsp. To save memory, the input values are stored in the buffer rather than
+; their squares.
+; algorithm:	for (k=0; k<ns; k++) {
+;			acc -= buff(k)^2 ;
+;			acc += (*ip)^2 ;
+;			buff(k++circ) = *ip++ ;
+;			if(acc>thr) break ;
+;			}
+;
+; cycles:	?
+; notes:	ns can be any value >=1. 
+;
+; passed arguments:
+;		BLKPWR_Obj *b 	state			pointer to struct	 AR0
+;		Int16 *ip 	input data		pointer to data	 AR1
+;		Int16 ns	number of samples	16 bit data		    T0
+;		Int32 thr 	threshold		32 bit data		    AC0
+;
+;		BLKPWR_Obj	contains:
+;			Int32	acc			accumulator
+;			Int16	*buff			buffer
+;			Int16	boffs			buffer offset
+;			Int16	bsize			size of circular buffer
+
+      PSH   T2,T3
+	  PSH	  mmap(ST1_55)
+	  PSH	  mmap(ST2_55)
+	  OR	  #0740h, mmap(ST1_55)     ;set M40, SXMD, SATD, FRCT
+	  BSET  AR2LC		         ; set AR2LC for a circular pointer on AR2
+
+      SUB   #1,T0  			   ; do loop ns>>1 times, loop count is 1 less
+      MOV   T0,BRC0			   ; setup loop count (always one less than n)
+
+	  MOV	  dbl(*AR0),AC1		; retrieve accumulator
+     SUB   AC0,AC1            ; subtract threshold so that detection occurs if AC1>0
+     || MOV   #0,T1           ; clear T1 - it will be the iteration counter
+
+	  ; set up buffer and loop counts
+     MOV   *AR0(short(#5)),BK03   ; buffer size
+	  MOV	  dbl(*AR0(short(#2))),XAR2	; buffer full address
+	  MOV	  mmap(AR2),BSA23			; buffer start address
+	  MOV	  *AR0(short(#4)),AR2		; buffer offset
+
+     RPTBLOCAL BP1-1				; do ns times
+     || ADD   #1,T0             ; put ns in T0 as a semaphore that no detection was made
+
+	  SQSM  *AR2,AC1             ; square and subtract the oldest value from the accumulator
+	  SQAM  T3=*AR1+,AC1         ; square the next value from the input vector and add to the accumulator
+	  XCC	  BP2,AC1>=#0          ; check for a detection
+	  || MIN	T1,T0               ; overwrite T0 with the iteration number if there is a detection
+BP2:
+     MOV   T3,*AR2+             ; copy the new input value to the buffer with circular address increment
+	  || ADD   #1,T1             ; increment the iteration counter
+BP1:
+     ADD   	AC0,AC1              ; restore the accumulator by adding the detection threshold
+	 POP	mmap(ST2_55)         ; retrieve status registers
+	 POP	mmap(ST1_55)
+     POP   	T2,T3
+	 MOV	AR2,*AR0(short(#4))	  ; store buffer offset
+	 MOV	AC1,dbl(*AR0)        ; store accumulator
+     RET
+
+
+	; re-enable remarks
+	.remark 5503
+	.remark 5505
+	.remark 5549
+	.remark 5568
+	.remark 5573
+	.remark 5579
+	.remark 5601
+	.remark 5673
+	.remark 5688

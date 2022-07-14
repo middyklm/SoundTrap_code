@@ -1,0 +1,346 @@
+; D3-API v1.0
+; Copyright (C) 2008-2010, Mark Johnson
+;
+; This file is part of D3, a real-time patch panel scheduler
+; for digital signal processors.
+;
+; This component of D3 is free software: you can redistribute it 
+; and/or modify it under the terms of the GNU General Public License 
+; as published by the Free Software Foundation, either version 3 of 
+; the License, or any later version.
+;
+; D3 is distributed in the hope that it will be useful,
+; but WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+; GNU General Public License for more details.
+;
+; You should have received a copy of the GNU General Public License
+; along with D3. If not, see <http://www.gnu.org/licenses/>.
+
+; //!< STATS module - assembly language implementations of statistical functions
+; //!< stats_asm.s55 v1.0
+;
+
+	.ARMS_off		;enable assembler for ARMS=0
+	.CPL_on			;enable assembler for CPL=1
+	.mmregs			;enable mem mapped register names
+
+	; disable remarks - none apply to C5509A
+	.noremark 5673		; accumulator shift left overflow CPU_89
+	.noremark 5688		; localrepeat corruption in compatibility mode
+
+	.global	_sumscu
+	.global	_sumsc
+	.global	_sumscw
+	.global	_pwr_sum
+	.global	_pwr_sumsc
+	.global	_max_sqr
+	.global	_pwr_dur
+	.global _vmax
+	.global _vmin
+
+	.text
+
+; Useage: int	sumscu(int *in, int skip, int n, int *scf) ;
+;	Unsigned scaled sum of a vector
+;	Input register structure:
+;		int 	*	AR0	input pointer
+;		int		T0	number of samples to skip between reads
+;		int		T1	number of input samples to process
+;		int	*	AR1	scalar for result
+;   Number of input samples can be >= 0
+;   Cycles:
+;		n+20		scalar verified
+
+_sumscu:
+
+	PSH	mmap(ST1_55)
+	OR	#600h,mmap(ST1_55)	; set M40, SATD
+	MOV	#0,AC0			; clear the accumulator
+
+	BCC	SS1,T1<=0		; check for zero input length
+    	SUB 	#1,T1			; setup the loop counter
+    	MOV     T1,CSR
+
+	BCLR	ACOV0			; clear the overflow flag
+	|| RPT	CSR
+	ADD	uns(*(AR0+T0)),AC0	; sum all values to a long
+
+	MPYM	*AR1,AC0,AC1		; do long x int multiply
+	|| MOV	AC0,T0
+	MPYMU	*AR1,T0,AC0
+	ADD	AC0<<#-16,AC1
+	SFTS	AC1,#16,AC0
+	SAT	AC0			; saturate result
+
+SS1:
+	POP	mmap(ST1_55)		; restore the status register
+    	RET                         	; return to calling function
+	|| MOV	HI(AC0),T0		; return result in T0
+
+
+; Useage: int	sumsc(int *in, int skip, int n, int *scf) ;
+;	Signed scaled sum of a vector
+;	Input register structure:
+;		int 	*	AR0	input pointer
+;		int		T0	number of samples to skip between reads
+;		int		T1	number of input samples to process
+;		int	*	AR1	scalar for result
+;   Number of input samples can be >= 0
+;   Cycles:
+;		n+20		scalar verified
+
+_sumsc:
+
+	PSH	mmap(ST1_55)
+	OR	#600h,mmap(ST1_55)	; set M40, SATD
+	MOV	#0,AC0			; clear the accumulator
+
+	BCC	SS2,T1<=0		; check for zero input length
+    	SUB 	#1,T1			; setup the loop counter
+    	MOV     T1,CSR
+
+	BCLR	ACOV0			; clear the overflow flag
+	|| RPT	CSR
+	ADD	*(AR0+T0),AC0		; sum all values to a long
+
+	MPYM	*AR1,AC0,AC1		; do long x int multiply
+	|| MOV	AC0,T0
+	MPYMU	*AR1,T0,AC0
+	ADD	AC0<<#-16,AC1
+	SFTS	AC1,#16,AC0
+	SAT	AC0			; saturate result
+
+SS2:
+	POP	mmap(ST1_55)		; restore the status register
+    	RET                         	; return to calling function
+	|| MOV	HI(AC0),T0		; return result in T0
+
+
+; Useage: int	sumscw(int *in, int *w, int skip, int n, int *scf) ;
+;	Input register structure:
+;		int 	*	AR0	input pointer
+;		int 	*	AR1	pointer to weight vector
+;		int		T0	number of samples to skip between reads
+;		int		T1	number of input samples to process
+;		int	*	AR2	scalar for result
+;   Number of input samples can be >= 0
+;   Cycles:
+;		n+20		scalar verified
+
+_sumscw:
+
+	PSH	mmap(ST1_55)
+	OR	#600h,mmap(ST1_55)	; set M40, SATD
+	MOV	#0,AC0			; clear the accumulator
+
+	BCC	SS2,T1<=0		; check for zero input length
+    	SUB 	#1,T1			; setup the loop counter
+    	MOV     T1,CSR
+
+	BCLR	ACOV0			; clear the overflow flag
+	|| RPT	CSR
+	MACM	*(AR0+T0),*AR1+,AC0	; weighted sum to a long
+
+	MPYM	*AR2,AC0,AC1		; do long x int multiply
+	|| MOV	AC0,T0
+	MPYMU	*AR2,T0,AC0
+	ADD	AC0<<#-16,AC1
+	SFTS	AC1,#16,AC0
+	SAT	AC0			; saturate result
+
+SS3:
+	POP	mmap(ST1_55)		; restore the status register
+    	RET                         	; return to calling function
+	|| MOV	HI(AC0),T0		; return result in T0
+
+
+
+; Useage: long	pwr_sum(int *in, int n, int shft) ;
+;	Input register structure:
+;		int *	AR0	input pointer
+;		int		T0	number of input samples to process
+;		int		T1	number of bits to shift the result
+;   Number of input samples can be >= 0
+;   Cycles:
+;		n+20		scalar verified
+
+_pwr_sum:
+
+	PSH		mmap(ST1_55)
+	OR		#600h,mmap(ST1_55)		;set M40, SATD
+
+	BCLR	ACOV0
+	MOV		#0,AC0	
+
+	BCC		LL1,T0<=0
+
+    SUB     #1,T0
+    MOV     T0,CSR
+
+	RPT		CSR
+
+	SQAM	*AR0+,AC0
+	
+	SFTS	AC0,T1
+LL1:
+	POP		mmap(ST1_55)
+    RET                         ;return to calling function
+	|| SAT	AC0
+
+
+; Useage: long	pwr_sumsc(int *in, int n, int shft, int *scf) ;
+;	Input register structure:
+;		int *	AR0	input pointer
+;		int		T0	number of input samples to process
+;		int		T1	shift for result
+;		int	*	AR1	scalar for result
+;   Number of input samples can be >= 0
+;   Cycles:
+;		n+20		scalar verified
+
+_pwr_sumsc:
+
+	PSH		mmap(ST1_55)
+	OR		#600h,mmap(ST1_55)		;set M40, SATD
+
+	BCLR	ACOV0
+	MOV		#0,AC0	
+
+	BCC		LL11,T0<=0
+
+    SUB     #1,T0
+    MOV     T0,CSR
+
+	RPT		CSR
+	SQAM	*AR0+,AC0
+
+	SFTS	AC0,T1,AC1
+	MPYM	*AR1,AC1,AC0
+	|| MOV	AC1,T0
+	MPYMU	*AR1,T0,AC1
+	ADD		AC1<<#-16,AC0
+
+LL11:
+	POP		mmap(ST1_55)
+    RET                         ;return to calling function
+	|| SAT	AC0
+
+
+; Useage: long	max_sqr(int *in, int skip, int n) ;
+;	Input register structure:
+;		int *	AR0	input pointer
+;		int		T0	number of values to skip between input samples
+;		int		T1	number of input samples to process
+;   Number of input samples must be > 0
+;   Cycles:
+;		2n+20		scalar verified
+
+_max_sqr:
+
+	PSH		mmap(ST1_55)
+	OR		#600h,mmap(ST1_55)		;set M40, SATD
+    SUB     #1,T1
+    MOV     T1,BRC0
+	MOV		#0,AC0	
+	|| RPTBLOCAL	LL2
+
+	SQRM	*(AR0+T0),AC1
+LL2:
+	MAX		AC1,AC0
+
+	POP		mmap(ST1_55)
+    RET                         ;return to calling function
+	|| SAT	AC0
+
+
+
+; Useage: int	vmax(int *in, int skip, int n) ;
+;	Returns the maximum value in an n-length vector.
+;	Input register structure:
+;		int *	AR0	input pointer
+;		int 	T0	number of values to skip between input samples
+;		int	T1	number of input samples to process
+;   Number of input samples must be >= 2
+;   Cycles:
+;		1n
+	
+_vmax:
+
+	SUB     #2,T1
+	MOV     T1,CSR
+	MOV	*(AR0+T0),AC1
+	MOV	*(AR0+T0),AC0	
+	|| RPT	CSR
+
+	MAX	AC0,AC1
+	|| MOV	*(AR0+T0),AC0
+
+    	RET                         ;return to calling function
+	|| MOV	AC1,T0
+
+
+
+; Useage: int	vmin(int *in, int skip, int n) ;
+;	Returns the minimum value in an n-length vector.
+;	Input register structure:
+;		int *	AR0	input pointer
+;		int 	T0	number of values to skip between input samples
+;		int	T1	number of input samples to process
+;   Number of input samples must be >= 2
+;   Cycles:
+;		1n
+	
+_vmin:
+
+	SUB     #2,T1
+	MOV     T1,CSR
+	MOV	*(AR0+T0),AC1
+	MOV	*(AR0+T0),AC0
+	|| RPT	CSR
+
+	MIN	AC0,AC1
+	|| MOV	*(AR0+T0),AC0
+
+    	RET                         ;return to calling function
+	|| MOV	AC1,T0
+
+
+
+; Useage: int	pwr_dur(int *in, int n, long emin, long emax, long *nl, int pshft) ;
+;	Input register structure:
+;		int *	AR0	input pointer
+;		int		T0	number of input samples to process
+;		long	AC0	minimum energy threshold
+;		long	AC1	maximum energy threshold
+;		long *	AR1	noise power
+;		int		T1	power shift in noise level
+;
+;   Number of input samples must be > 0
+;   Cycles:
+;		?
+
+_pwr_dur:
+        SUB     #1,T0
+	MOV	    #0,AC3
+        || MOV  T0,BRC0
+	MOV     #0,T0	
+
+		RPTBLOCAL  LL3
+		|| SQRM	*AR0+,AC2
+
+		ADD	AC2<<T1,AC3
+		SUB dbl(*AR1),AC3		; running sum of energy in the transient
+		CMP	AC3>=AC0,TC1
+		CMP	AC3<AC1,TC2
+		; increment duration count in T0 if TC1 & TC2
+		XCCPART	LL3, TC1 & TC2
+		|| ADD	#1, T0
+LL3:
+		SQRM	*AR0+,AC2
+
+        RET                         ;return to calling function
+
+
+	.remark 5673
+	.remark 5688

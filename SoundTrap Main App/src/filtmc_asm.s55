@@ -1,0 +1,169 @@
+; D3-API v1.0
+; Copyright (C) 2008-2010, Mark Johnson / WHOI
+;
+; This file is part of D3, a real-time patch panel scheduler
+; for digital signal processors.
+;
+; This component of D3 is currently part of the 'DMON technology' and 
+; redistribution is restricted. You may only access and modify this
+; software under the terms of the DMON General License.
+;
+; D3 is distributed in the hope that it will be useful,
+; but WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+; DMON General License for more details.
+;
+; You should have received a copy of the DMON General License
+; along with D3. If not, contact dmon@whoi.edu.
+
+; //!< filtmc_asm.s55 v1.0
+; //!< Multi-channel FIR filter
+; Last modified: Aug 2014 mj added psh/pop of modified ST registers 
+;
+
+    .ARMS_on                      ;enable assembler for ARMS=1
+    .CPL_on                       ;enable assembler for CPL=1
+    .mmregs                       ;enable mem mapped register names
+
+	.global  _filtmc
+
+	; disable remarks - none apply to C5509A
+	.noremark 5503		; MMR read of SP/SSP CPU_84
+	.noremark 5505		; MMR read of SP/SSP CPU_84
+	.noremark 5549		; MAR in compatibility mode CPU_28
+	.noremark 5568		; BCC failure CPU_38
+	.noremark 5573		; MAR and BK/BSA updates CPU_43
+	.noremark 5579		; dual MAC sensitive to stalls CPU_45
+	.noremark 5601		; MMR write to ST0/2 not pipeline protected CPU_75
+	.noremark 5673		; accumulator shift left overflow CPU_89
+	.noremark 5688		; RPTLOCAL in compatibility mode CPU_85
+
+ST2mask  .set  0000000100001100b    ;circular/linear pointers
+
+_filtmc:
+; prototype: 	int filtmc(int *ip, int *op, FLT_Obj *b, int ns)
+; function:		multi-channel convolution
+; algorithm:	for each channel do:
+;				for (k=0; k<ns; k++) {
+;					buff(k) = *ip++
+;		    		*op++ = sum i=0:nf-1 (*buff(k-nch*i) * coef(i)) ;
+;
+; cycles:	nch*ns/2*(nf+6)+OH, ns is number of samples/channel
+; notes:	ns and nch can be any value >=1 but ns*nch must be at least 2
+;			nf must be at least 2. 
+;			coef must point to a different DARAM space than buff
+;			buffer length must be ((nf-1)*nch+2 - this ensures that there
+;			is room for two new samples per iteration irrespective of the
+; 			number of channels.
+;			OH in inner loop is 2 bigger than expected, not sure why
+; passed arguments:
+;		Int16 *ip 	input data			pointer to data		AR0
+;		Int16 *op 	output data			pointer to data		AR1
+;		FLT_Obj *b 	filter buffers		pointer to struct	AR2
+;		Int16 ns	number of samples	16 bit data			T0
+;
+;		FLT_Obj	contains:
+;			Int16	*coef				filter coefficients
+;			Int16	*buff				buffer start address
+;			Int16	boffs				buffer offset
+;			Int16	nf					filter length
+;			Int16	nch					number of channels
+;			Int16	bsize				size of circular buffer
+
+		PSH		  mmap(ST1_55)
+		PSH		  mmap(ST2_55)
+	    AND		  #01FFh, mmap(ST0_55)     ;clear all ACOVx,TC1, TC2, C
+		OR		  #0700h, mmap(ST1_55)     ;set M40, SXMD, SATD
+
+		; set up filter
+		MOV		  dbl(*AR2),XCDP		; filter coefficients
+		MOV		  mmap(CDP),BSAC		; filter coefficients start address
+		MOV	  	  #0,CDP				; filter always starts at coef 0
+		MOV		  *AR2(short(5)),BKC	; filter length nf
+		|| MOV	  T0,HI(AC2)			; number of samples per channel
+		MOV		  *AR2(short(5)),T1		; nf
+		|| PSH	  AR2
+
+		; set up buffer and loop counts
+		MOV		  dbl(*AR2(short(2))),XAR3	; buffer full address
+		MOV		  mmap(AR3),BSA23		; buffer start address
+		MOV		  *AR2(short(4)),AR3	; buffer offset
+		|| SUB	  #2,T1
+		MOV		  *AR2(short(6)),T0		; number of channels
+		|| MOV	  T1,CSR				; filter loop executes nf-1 times
+		MOV		  *AR2(short(7)),BK03	; buffer size ((nf-1)*nch+2)
+ 		|| MPY    T0,AC2				; ns*nch
+		MOV		  XAR3,XAR2				; setup high part of AR2 same as AR3
+		BTST	  #0,AC2,TC1			; check for odd ns*nch
+
+		; enable circular buffers
+		OR	#ST2mask, mmap(ST2_55)		; config circ/linear pointers
+		BSET	  FRCT					; turn on fractional mode, added 8/jan/2010
+
+		MOV		  #0,AC0				; clear the accumulator
+		|| BCC	  L10,!TC1				; if even ns*nch, skip the next bit
+
+		; do a single iteration of the filter to take care of the odd point
+		MOV		  *AR0+,*AR3			; load buffer with the next input point
+		|| RPT	  CSR					; repeat nf-1 times
+		MACM      *(AR3+T0),*CDP+,AC0	; implement the filter
+
+		MACMR	  *AR3+,*CDP+,AC0		; do a round on the last mac and don't increment the buffer pointer
+		MOV		  HI(AC0),*AR1+			; loop ends, store results
+		BCC		  L12,AC2==1			; if only one iteration needed, go to end
+
+L10:							; go on to do double filter iterations
+		SFTS	  AC2,#-1
+        SUB       #1,AC2,T1    		; do loop ns*nch>>1 times, loop count is 1 less
+        MOV       T1,BRC0			; setup loop count (always one less than n)    
+		MOV	  	  AR3,AR2			; setup a 2nd pointer to the first buffer to avoid indexed addressing
+		AMAR	  *AR2-
+
+        RPTBLOCAL L11				; do n times
+		|| MOV		  #0,AC0		; clear accumulator
+
+		MOV		  *AR0+,*AR3			; load buffer with 2 new input points
+		|| MOV	  #0,AC1
+		MOV		  *AR0+,*AR2
+		|| RPT	  CSR					; do nf-1 times
+
+		MAC	  	  *(AR3+T0),*CDP+,AC0
+		::MAC	  *(AR2+T0),*CDP+,AC1
+
+		MACR	  *AR3,*CDP+,AC0	; last filter iteration
+		::MACR    *AR2,*CDP+,AC1	; with different buffer pointer update
+
+		MOV		  HI(AC0),*AR1+			; loop ends, store results
+L11:
+		MOV		  HI(AC1),*AR1+			; loop ends, store results
+		|| MOV	  #0,AC0
+
+L12:
+		; Check for overflow
+		MOV		  #0,T0				; clear flag
+
+		XCCPART	  L13, overflow(AC0)
+		|| MOV	  #1,T0				; set flag if overflow occurred
+L13:
+
+		XCCPART	  L14, overflow(AC1)
+		|| MOV	  #1,T0				; set flag if overflow occurred
+L14:
+
+		POP		  AR2
+		POP	      mmap(ST2_55)
+		POP	      mmap(ST1_55)
+		MOV		  AR3,*AR2(4)		; store buffer offset
+        	RET
+
+
+	; re-enable remarks
+	.remark 5503
+	.remark 5505
+	.remark 5549
+	.remark 5568
+	.remark 5573
+	.remark 5579
+	.remark 5601
+	.remark 5673
+	.remark 5688

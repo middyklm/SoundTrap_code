@@ -1,0 +1,186 @@
+; D3-API v1.0
+; Copyright (C) 2008-2010, Mark Johnson
+;
+; This file is part of D3, a real-time patch panel scheduler
+; for digital signal processors.
+;
+; This component of D3 is free software: you can redistribute it 
+; and/or modify it under the terms of the GNU General Public License 
+; as published by the Free Software Foundation, either version 3 of 
+; the License, or any later version.
+;
+; D3 is distributed in the hope that it will be useful,
+; but WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+; GNU General Public License for more details.
+;
+; You should have received a copy of the GNU General Public License
+; along with D3. If not, see <http://www.gnu.org/licenses/>.
+
+; //!< MISC module - sundry assembly language functions
+; //!< misc_asm.s55 v1.0
+;
+
+	.CPL_on			; enable assembler for CPL=1
+	.mmregs			; enable mem mapped register names
+
+	; disable remarks - none apply to C5509A
+	.noremark 5573		; MAR operations CPU_43
+	.noremark 5673		; accumulator shift left overflow CPU_89
+	.noremark 5688		; localrepeat corruption in compatibility mode
+
+	.global	_mticks2ms
+	.global	_find1stpwr
+	.global	_newpwr_dur
+	.global _mpy_lfi
+	.global _cpwr_sum
+
+	.text
+
+; Useage: int	mticks2ms(long *t) ;
+;	Input register structure:
+;		long *	AR0		t
+;	Returns:
+;		int	T0	number of milliseconds in t microseconds
+
+_mticks2ms:
+
+	MOV		dbl(*AR0+),AC1		; get rtime
+	MOV		dbl(*AR0-),AC0		; get mticks
+	SFTS	AC0,#8
+	MPYKR	#16777,AC0		; mticks in milliseconds
+	MOV		HI(AC0),T0		; T0 = milliseconds
+	MPYK	#131,AC0			; mticks in seconds x 2
+	ADD		AC0<<#-17,AC1		; corrected rtime
+	SFTS	AC0,#-1				; mticks in seconds
+	MPYK	#1000,AC0			; seconds to milliseconds
+	MOV	AC1,dbl(*AR0)		    ; overwrite rtime in memory
+    RET                     ; return to calling function
+	|| SUB	AC0,T0			; remainder of milliseconds, +ve
+
+
+; Useage: int	find1stpwr(long thr, int *in, int skip, int n) ;
+;	Work backwards down *in to find the first (i.e., the last
+;   in a backwards search) that has instantaneous power > thr.
+;
+;	Input register structure:
+;		long	AC0	power threshold
+;		int *	AR0	input pointer
+;		int		T0	number of values to skip between input samples
+;		int		T1	number of input samples to process
+;   Number of input samples must be > 0
+;   Cycles:
+;		2n+20		scalar verified
+
+_find1stpwr:
+
+    SUB     #1,T1
+	|| MOV	T2,AC2
+    MOV     T1,BRC0
+	MOV		T0,HI(AC1)
+	|| MOV	#-1,T2
+	MPY		T1,AC1
+	ADD		AC1,AR0
+	ADD		#1,T1
+	|| RPTBLOCAL	FP1-1
+
+	SQSM	*(AR0-T0),AC0,AC1
+	|| ASUB	#1,T1
+	XCCPART	FP1,AC1<#0
+	|| MOV	T1,T2
+FP1:
+
+	MOV		T2,T0
+    RET                         ;return to calling function
+	|| MOV	AC2,T2
+
+
+; Useage: int	newpwr_dur(int *in, int n, long et, long nl, int p) ;
+;	Input register structure:
+;		int *	AR0	input pointer
+;		int		T0	number of input samples to process
+;		long	AC0	signal energy in vector
+;		long	AC1	noise power
+;		int		T1	energy proportion (Q1.15)
+;
+;   Number of input samples must be > 0
+;   Cycles:
+;		?
+
+_newpwr_dur:
+		SFTL	AC0,#16,AC2
+        || ASUB #1,T0
+		SFTL	AC2,#-1
+		MPY		T1,AC2
+        || MOV 	T0,BRC0
+		SFTL	AC2,#-15
+		MAC		AC0,T1,AC2
+		|| MOV  #0,T0	
+		SFTS	AC0,#-1
+		PSH		mmap(ST1_55)
+		OR		#600h,mmap(ST1_55)		;set M40, SATD
+
+		RPTBLOCAL NPD1-1
+		|| NEG		AC0
+
+		SQAM	*AR0+,AC0		; add the next squared signal value
+		SUB		AC1,AC0			; subtract the noise power
+		ABS		AC0,AC3			; take abs value
+		CMP		AC3<AC2,TC1		; compare against the threshold
+		; increment duration count in T0 if AC1<AC2
+		XCCPART NPD1, TC1
+		|| ADD	#1, T0
+NPD1:
+
+		POP		mmap(ST1_55)
+        RET                         ;return to calling function
+
+; Useage: long	mpy_lfi(long e, int p) ;
+;	long signed x q1.15
+;	Input register structure:
+;		long	AC0	multiplicand
+;		int		T0	multiplicand (Q1.15)
+
+_mpy_lfi:
+		SFTL	AC0,#15,AC1
+		MPY		T0,AC1
+		SFTL	AC1,#-15
+		MAC		AC0,T0,AC1
+        RET                         ; return to calling function
+		|| SFTS	AC1,#1,AC0
+
+
+; Useage: long	cpwr_sum(int *in, int n, long thr, int shft) ;
+;	Input register structure:
+;		int *	AR0	input pointer
+;		int		T0	number of input samples to process
+;		int		T1	number of bits to shift the result
+;   Number of input samples can be >= 0
+;   Cycles:
+;		n+20		scalar verified
+
+_cpwr_sum:
+
+	PSH		mmap(ST1_55)
+	OR		#600h,mmap(ST1_55)		;set M40, SATD
+	MOV		#0,AC1	
+    SUB     #1,T0
+    MOV     T0,BRC0
+
+	RPTBLOCAL	CP1
+
+	SQRM	*AR0+,AC2
+	MIN		AC0,AC2
+CP1:
+	ADD		AC2,AC1
+
+	SFTS	AC1,T1
+	SAT		AC1
+	POP		mmap(ST1_55)
+    RET                         ;return to calling function
+	|| MOV	AC1,AC0
+
+
+	.remark 5573
+	.remark 5673
+	.remark 5688
